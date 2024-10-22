@@ -2,14 +2,20 @@ import MetaTrader5 as mt5
 from websocket import WebSocketApp
 import json
 from colorama import Fore, Style, init
+from dotenv import load_dotenv
+import os
+import time
+import threading
 
-# Initialize colorama for color support in terminal
 init(autoreset=True)
+load_dotenv()
 
-lotList = {
-    "BTCUSD": 0.1,
-    "XAUUSD": 0.06
-}
+with open('config.json', 'r') as config_file:
+    config = json.load(config_file)
+
+lotList = config['symbols']
+retry_attempts = config["retry_attempts"]
+retry_delay = config["retry_delay"]
 
 def input_websocket_url():
     return input("Enter the WebSocket URL: ")
@@ -104,22 +110,30 @@ def on_close(ws, close_status_code, close_msg):
 def on_open(ws):
     print(f"{Fore.GREEN}🔓 {Style.BRIGHT}WebSocket connection opened")
 
+def start_websocket():
+    for attempt in range(retry_attempts):
+        try:
+            print(f"{Fore.GREEN}🔗 Attempting WebSocket connection (attempt {attempt + 1})...")
+            ws = WebSocketApp(input_websocket_url(),
+                              on_message=on_message,
+                              on_error=on_error,
+                              on_close=on_close)
+            ws.on_open = on_open
+            ws.run_forever()
+            break  # Connection successful, break the loop
+        except Exception as e:
+            print(f"{Fore.RED}❗ {Style.BRIGHT}WebSocket connection failed: {e}")
+            time.sleep(retry_delay)
+
 def main():
-    websocket_url = input_websocket_url()
-    
-    if not mt5.initialize():
-        print(f"{Fore.RED}❌ {Style.BRIGHT}initialize() failed, error code =", mt5.last_error())
+    if not mt5.initialize(login=int(os.getenv('MT5_LOGIN')), password=os.getenv('MT5_PASSWORD'), server=os.getenv('MT5_SERVER')):
+        print(f"{Fore.RED}❌ {Style.BRIGHT}MT5 initialization failed: {mt5.last_error()}")
         return
     else:
         print(f"{Fore.GREEN}✅ {Style.BRIGHT}MT5 connected")
 
-    ws = WebSocketApp(websocket_url,
-                      on_message=on_message,
-                      on_error=on_error,
-                      on_close=on_close)
-
-    ws.on_open = on_open
-    ws.run_forever()
+    # Start WebSocket connection
+    start_websocket()
 
 if __name__ == "__main__":
     main()
