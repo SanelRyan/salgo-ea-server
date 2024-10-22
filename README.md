@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements an automated trading bot that integrates **MetaTrader 5** (MT5) with WebSocket-based signals to execute and manage trades based on real-time data. The bot connects to MT5, listens for WebSocket signals, and automatically places or closes trades based on the received instructions.
+Python MT5 EA that integrates MT5 with WebSocket-based signals to execute and manage trades based on real-time data. The bot connects to MT5, listens for WebSocket signals, and automatically places or closes trades based on the received instructions.
 
 ## Features
 
