@@ -23,7 +23,6 @@ def input_websocket_url():
 def on_message(ws, message):
     try:
         data = json.loads(message)
-        print(f"Received WebSocket data: {data}")
         symbol = data['symbol']
         action = data['action']
         price = data['price']
