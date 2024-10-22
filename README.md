@@ -1,117 +1,98 @@
-# Salgo Trading EA Server
+# Project: MetaTrader5 WebSocket Trading Bot
 
-### Overview
+## Overview
 
-The **Salgo Trading EA Server** is a Python-based application that listens for trade commands from a webhook server, which is triggered by TradingView alerts. This server processes signals to either open or close trades on MetaTrader 5 (MT5) for supported trading pairs like BTCUSD and XAUUSD.
+This project implements an automated trading bot that integrates **MetaTrader 5** (MT5) with WebSocket-based signals to execute and manage trades based on real-time data. The bot connects to MT5, listens for WebSocket signals, and automatically places or closes trades based on the received instructions.
 
----
+## Features
 
-### Features
+-   **Real-Time Trade Execution**: The bot listens for WebSocket signals that indicate entry or exit points for trades, executing them instantly on MetaTrader 5.
+-   **Dynamic Handling of Buy/Sell Actions**: Based on the WebSocket message, the bot can handle both long (buy) and short (sell) positions.
+-   **Auto Retry WebSocket Connection**: In case of connection issues, the bot automatically retries connecting to the WebSocket based on a pre-configured retry logic.
+-   **Auto Trade Management**: Upon receiving a new entry signal, the bot closes all existing positions for the symbol before placing a new trade to ensure smooth management of trades.
+-   **Color-Coded Terminal Output**: It uses `colorama` to provide color-coded logs for easier tracking of events like trade success, failure, connection attempts, and errors.
 
--   **Real-time WebSocket Connectivity**: The server listens for WebSocket messages, decoding them into trade actions.
--   **Automated Trade Execution**: Upon receiving a signal (entry or exit), the EA closes existing trades for the given symbol and executes the appropriate buy/sell action.
--   **Trade Management**: Trades are managed with pre-defined lot sizes, and open positions are automatically closed when a new entry signal is received.
--   **Error Handling**: The system handles WebSocket errors and trade failures gracefully, logging them with descriptive messages.
+## Requirements
 
----
+-   **MetaTrader 5** (MT5) account with login credentials.
+-   **WebSocket** URL to receive trade signals.
+-   A `config.json` file containing the following fields:
+    -   `symbols`: A dictionary of symbols (assets) and their respective lot sizes.
+    -   `retry_attempts`: Number of times to retry WebSocket connection upon failure.
+    -   `retry_delay`: Delay (in seconds) between retry attempts.
 
-### Supported Trading Pairs
+## Setup
 
--   **BTCUSD**: 0.1 lot size
--   **XAUUSD**: 0.06 lot size
-
----
-
-### How It Works
-
-1. **WebSocket Connection**: The EA server connects to a WebSocket URL, which should be provided by the user during startup.
-2. **Trade Actions**:
-    - **Entry Signal**: When an "entry" signal is received for a symbol (e.g., BTCUSD), the server:
-        1. Closes all open positions for that symbol.
-        2. Opens a new position (buy or sell) based on the provided direction (`long` or `short`).
-    - **Exit Signal**: When an "exit" signal is received, the server closes all open positions for that symbol.
-3. **Error Handling**: If an unknown action or error occurs, the server prints a detailed error message.
-
----
-
-### Installation
-
-1. **Install Requirements**:
+1. **Install the required dependencies**:
 
     ```bash
-    pip install MetaTrader5 websocket-client colorama
+    pip install MetaTrader5 websocket-client colorama python-dotenv
     ```
 
-2. **Setup MetaTrader 5**:
-   Ensure that you have MetaTrader 5 installed on your machine, and that it is properly connected to your broker's server.
+2. **Prepare the Environment**:
 
-3. **Run the Server**:
-   Execute the following command:
+    - Create a `.env` file in the project directory with your MT5 account information:
+
+        ```
+        MT5_LOGIN=your_login
+        MT5_PASSWORD=your_password
+        MT5_SERVER=your_server
+        ```
+
+    - Create a `config.json` file in the project directory. Example:
+
+        ```json
+        {
+        	"symbols": {
+        		"EURUSD": 0.1,
+        		"GBPUSD": 0.1
+        	},
+        	"retry_attempts": 5,
+        	"retry_delay": 10
+        }
+        ```
+
+3. **Run the Bot**:
+
+    Simply execute the Python script:
 
     ```bash
-    python salgo_ea_server.py
+    python bot.py
     ```
 
-    You will be prompted to enter the WebSocket URL.
+    During execution, you'll be prompted to enter the WebSocket URL.
+
+## How it Works
+
+1. **WebSocket Connection**:
+   The bot establishes a WebSocket connection to listen for real-time trade signals (e.g., buy/sell, entry/exit).
+
+2. **Handling WebSocket Messages**:
+   When the bot receives a WebSocket message, it processes the data to determine whether to place a new trade or close existing positions based on the message's `action` field (`entry` or `exit`).
+
+3. **MT5 Trade Execution**:
+   The bot uses MetaTrader 5's API to send trade requests. It calculates the buy or sell price based on current market data and executes the trade accordingly.
+
+4. **Connection Retry**:
+   If the WebSocket connection fails, the bot retries based on the `retry_attempts` and `retry_delay` configured in `config.json`.
+
+## Key Functions
+
+-   **on_message(ws, message)**: Processes incoming WebSocket messages to determine trading actions (entry/exit).
+-   **execute_trade(symbol, position, price)**: Sends the buy/sell order to MetaTrader 5 based on the signal received.
+-   **close_trade(symbol)**: Closes all existing open positions for the given symbol.
+-   **start_websocket()**: Manages the WebSocket connection and retries in case of connection failures.
+-   **main()**: Initializes the MetaTrader 5 API and starts the WebSocket listener.
+
+## Error Handling
+
+-   The bot logs detailed error messages using `colorama` for enhanced readability, including issues with trade execution, WebSocket messages, and connection failures.
+-   If MT5 initialization fails, the bot terminates gracefully with an appropriate message.
+
+## License
+
+This project is licensed under the **BSD 2-Clause License**. See the `LICENSE` file for details.
 
 ---
 
-### WebSocket Message Structure
-
-The WebSocket server expects incoming messages in JSON format, as shown below:
-
-```json
-{
-	"symbol": "BTCUSD",
-	"action": "entry", // 'entry' for new trades, 'exit' for closing positions
-	"price": 20000.5, // Current price (for logging purposes)
-	"position": "long" // 'long' for buy, 'short' for sell
-}
-```
-
-### Example Execution Flow
-
-1. **Entry Signal**:
-    - WebSocket message is received:
-        ```json
-        {
-        	"symbol": "XAUUSD",
-        	"action": "entry",
-        	"price": 1800.5,
-        	"position": "long"
-        }
-        ```
-    - The system closes all XAUUSD positions and opens a new buy position.
-2. **Exit Signal**:
-    - WebSocket message is received:
-        ```json
-        {
-        	"symbol": "BTCUSD",
-        	"action": "exit",
-        	"price": 22000.0
-        }
-        ```
-    - The system closes all open BTCUSD positions.
-
----
-
-### Logging & Emojis
-
-The server uses **Colorama** for color-coded console output and emojis to highlight different trade statuses:
-
--   🟢 Entry signals
--   ⚠️ Exit signals
--   ✅ Successful trades
--   ❌ Failed trades
-
----
-
-### Contributing
-
-Feel free to fork this repository and submit pull requests. All contributions that enhance the automation of trade execution and signal processing are welcome!
-
----
-
-### License
-
-This project is unlicensed.
+**Author**: SanelRyan
