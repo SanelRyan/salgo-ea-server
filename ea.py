@@ -35,44 +35,6 @@ def on_message(ws, message):
     except Exception as e:
         print(f"{Fore.RED}❗ {Style.BRIGHT}Error processing message: {e}")
 
-def close_all_trades():
-    # Close all open positions across all symbols
-    positions = mt5.positions_get()
-    if positions:
-        print(f"{Fore.MAGENTA}🔄 {Style.BRIGHT}Closing all open positions...")
-        for position in positions:
-            symbol = position.symbol
-            if position.type == mt5.POSITION_TYPE_BUY:
-                order_type = mt5.ORDER_TYPE_SELL  # Close buy with a sell
-                price = mt5.symbol_info_tick(symbol).bid
-            elif position.type == mt5.POSITION_TYPE_SELL:
-                order_type = mt5.ORDER_TYPE_BUY  # Close sell with a buy
-                price = mt5.symbol_info_tick(symbol).ask
-            else:
-                print(f"{Fore.RED}❗ {Style.BRIGHT}Unknown position type for ticket {position.ticket}")
-                continue
-
-            order_request = {
-                "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
-                "type": order_type,
-                "volume": position.volume,
-                "price": price,
-                "deviation": 20,
-                "magic": 244,
-                "comment": "Close all trades",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_FOK,
-            }
-
-            result = mt5.order_send(order_request)
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                print(f"{Fore.RED}❗ {Style.BRIGHT}Close order failed for {symbol}: {result.retcode}, {result.comment}")
-            else:
-                print(f"{Fore.GREEN}✅ {Style.BRIGHT}Closed position for {symbol}: {position.ticket}")
-    else:
-        print(f"{Fore.YELLOW}⚠️ {Style.BRIGHT}No open positions to close.")
-
 def execute_trade(symbol, position, price):
     # Decide order type based on position (long or short)
     if position == 'long':
@@ -111,24 +73,15 @@ def close_trade(symbol):
     if positions:
         print(f"{Fore.YELLOW}⚠️ {Style.BRIGHT}Closing open positions for {symbol}...")
         for position in positions:
-            if position.type == mt5.POSITION_TYPE_BUY:
-                order_type = mt5.ORDER_TYPE_SELL
-                price = mt5.symbol_info_tick(symbol).bid
-            elif position.type == mt5.POSITION_TYPE_SELL:
-                order_type = mt5.ORDER_TYPE_BUY
-                price = mt5.symbol_info_tick(symbol).ask
-            else:
-                print(f"{Fore.RED}❌ {Style.BRIGHT}Unknown position type for ticket {position.ticket}")
-                continue
-
             order_request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": symbol,
-                "type": order_type,
+                "type": mt5.ORDER_TYPE_SELL if position.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY,
                 "volume": position.volume,
-                "price": price,
+                "price": mt5.symbol_info_tick(symbol).bid if position.type == mt5.POSITION_TYPE_BUY else mt5.symbol_info_tick(symbol).ask,
                 "deviation": 20,
                 "magic": 244,
+                "position": position.ticket,  # Target the specific position to close
                 "comment": "Webhook close trade",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_FOK,
