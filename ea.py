@@ -6,12 +6,18 @@ from colorama import Fore, Style, init
 # Initialize colorama for color support in terminal
 init(autoreset=True)
 
+lotList = {
+    "BTCUSD": 0.1,
+    "XAUUSD": 0.06
+}
+
 def input_websocket_url():
     return input("Enter the WebSocket URL: ")
 
 def on_message(ws, message):
     try:
         data = json.loads(message)
+        print(f"Received WebSocket data: {data}")
         symbol = data['symbol']
         action = data['action']
         price = data['price']
@@ -19,7 +25,7 @@ def on_message(ws, message):
 
         if action == 'entry':
             print(f"{Fore.CYAN}🟢 {Style.BRIGHT}New entry signal received for {symbol} at {price}. Closing all trades first...")
-            close_all_trades()  # Close all open trades before taking a new one
+            close_trade(symbol)  # Close all open trades before taking a new one
             execute_trade(symbol, position, price)
         elif action == 'exit':
             print(f"{Fore.YELLOW}⚠️ {Style.BRIGHT}Exit signal received for {symbol}. Closing open positions...")
@@ -85,7 +91,7 @@ def execute_trade(symbol, position, price):
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": symbol,
         "type": order_type,
-        "volume": 0.1,
+        "volume": lotList[symbol],
         "price": price,
         "deviation": 20,
         "magic": 244,
@@ -123,7 +129,9 @@ def close_trade(symbol):
                 "price": price,
                 "deviation": 20,
                 "magic": 244,
-                "comment": "Webhook close trade"
+                "comment": "Webhook close trade",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_FOK,
             }
 
             result = mt5.order_send(order_request)
