@@ -1,9 +1,0 @@
-{
-    "symbols": {
-      "BTCUSD": 0.1,
-      "XAUUSD": 0.1
-    },
-    "retry_attempts": 5,
-    "retry_delay": 1
-  }
-  
