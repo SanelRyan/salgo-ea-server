@@ -8,6 +8,10 @@ import time
 import threading
 from datetime import datetime
 
+import atexit
+import signal
+import sys
+
 init(autoreset=True)
 load_dotenv()
 
@@ -25,7 +29,7 @@ def logit(message, shouldPrintToo=False, color_code=""):
     formatted_message = f"[{timestamp}] {message}"
     
     # Log to file
-    with open(log_file, 'a') as f:
+    with open(log_file, 'a', encoding="utf-8") as f:
         f.write(f"{formatted_message}\n")
     
     # Optionally print to console
@@ -167,6 +171,12 @@ def on_close(ws, close_status_code, close_msg):
 def on_open(ws):
     logit(f"🔓 WebSocket connection opened", True, Fore.GREEN)
 
+
+def keepAlive(ws):
+    while True:
+        ws.ping()
+        time.sleep(30)
+
 def start_websocket():
     for attempt in range(retry_attempts):
         try:
@@ -177,12 +187,34 @@ def start_websocket():
                               on_close=on_close)
             ws.on_open = on_open
             ws.run_forever()
+            keepAliveThread = threading.Thread(target=keepAlive, args=(ws,))
+            keepAliveThread.daemon = True
+            keepAliveThread.start()
             break
         except Exception as e:
             logit(f"❗ WebSocket connection failed: {e}", True, Fore.RED)
             time.sleep(retry_delay)
 
+def handle_exit(signum=None, frame=None):
+    logit("🔒 Script is exiting due to signal or exception", True, Fore.CYAN)
+    sys.exit(0)
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if not issubclass(exc_type, KeyboardInterrupt):
+        logit(f"❗ Unhandled exception: {exc_value}", True, Fore.RED)
+    handle_exit()
+
+def register_exit_handlers():
+    signal.signal(signal.SIGINT, handle_exit) 
+    signal.signal(signal.SIGTERM, handle_exit)
+
+    atexit.register(handle_exit)
+
+    sys.excepthook = handle_exception
+
+
 def main():
+    register_exit_handlers()
     if not mt5.initialize(login=int(os.getenv('MT5_LOGIN')), password=os.getenv('MT5_PASSWORD'), server=os.getenv('MT5_SERVER')):
         logit(f"❌ MT5 initialization failed: {mt5.last_error()}", True, Fore.RED)
         return
@@ -190,6 +222,9 @@ def main():
         logit(f"✅ MT5 connected", True, Fore.GREEN)
 
     start_websocket()
+
+
+
 
 if __name__ == "__main__":
     main()
