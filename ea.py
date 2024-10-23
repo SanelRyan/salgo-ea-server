@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import time
 import threading
+from datetime import datetime
 
 init(autoreset=True)
 load_dotenv()
@@ -16,6 +17,21 @@ with open('config.json', 'r') as config_file:
 lotList = config['symbols']
 retry_attempts = config["retry_attempts"]
 retry_delay = config["retry_delay"]
+
+log_file = "ea.log"
+
+def logit(message, shouldPrintToo=False, color_code=""):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    formatted_message = f"[{timestamp}] {message}"
+    
+    # Log to file
+    with open(log_file, 'a') as f:
+        f.write(f"{formatted_message}\n")
+    
+    # Optionally print to console
+    if shouldPrintToo:
+        colored_message = f"{color_code}{message}{Style.RESET_ALL}"
+        print(colored_message)
 
 def input_websocket_url():
     return input("Enter the WebSocket URL: ")
@@ -29,16 +45,16 @@ def on_message(ws, message):
         position = data['position']
 
         if action == 'entry':
-            print(f"{Fore.CYAN}🟢 {Style.BRIGHT}New entry signal received for {symbol} at {price}. Closing all trades first...")
+            logit(f"🟢 New entry signal received for {symbol} at {price}. Closing all trades first...", True, Fore.CYAN)
             close_trade(symbol)
             execute_trade(symbol, position, price)
         elif action == 'exit':
-            print(f"{Fore.YELLOW}⚠️ {Style.BRIGHT}Exit signal received for {symbol}. Closing open positions...")
+            logit(f"⚠️ Exit signal received for {symbol}. Closing open positions...", True, Fore.YELLOW)
             close_trade(symbol)
         else:
-            print(f"{Fore.RED}❌ {Style.BRIGHT}Unknown action: {action}")
+            logit(f"❌ Unknown action: {action}", True, Fore.RED)
     except Exception as e:
-        print(f"{Fore.RED}❗ {Style.BRIGHT}Error processing message: {e}")
+        logit(f"❗ Error processing message: {e}", True, Fore.RED)
 
 def calculate_dynamic_stop_loss(profit, lot):
     base_initial_sl = config['base_initial_sl']
@@ -72,28 +88,27 @@ def update_stop_loss(symbol, lot):
             }
             result = mt5.order_send(order_request)
             if result.retcode != mt5.TRADE_RETCODE_DONE:
-                print(f"{Fore.RED}❌ Failed to update SL for {symbol}: {result.retcode}, {result.comment}")
+                logit(f"❌ Failed to update SL for {symbol}: {result.retcode}, {result.comment}", True, Fore.RED)
             else:
-                print(f"{Fore.GREEN}✅ Updated SL for {symbol} to {new_sl} profit")
+                logit(f"✅ Updated SL for {symbol} to {new_sl} profit", True, Fore.GREEN)
 
 def monitor_and_update_sl(symbol):
     lot = lotList[symbol]
     while True:
         update_stop_loss(symbol, lot)
-        time.sleep(10)  # Adjust the frequency of SL updates as needed
+        time.sleep(10)
 
 def execute_trade(symbol, position, price):
-    # Decide order type based on position (long or short)
     if position == 'long':
         order_type = mt5.ORDER_TYPE_BUY
         price = mt5.symbol_info_tick(symbol).ask
-        print(f"{Fore.GREEN}📈 {Style.BRIGHT}Executing long trade for {symbol} at {price}.")
+        logit(f"📈 Executing long trade for {symbol} at {price}.", True, Fore.GREEN)
     elif position == 'short':
         order_type = mt5.ORDER_TYPE_SELL
         price = mt5.symbol_info_tick(symbol).bid
-        print(f"{Fore.RED}📉 {Style.BRIGHT}Executing short trade for {symbol} at {price}.")
+        logit(f"📉 Executing short trade for {symbol} at {price}.", True, Fore.RED)
     else:
-        print(f"{Fore.RED}❌ {Style.BRIGHT}Unknown position: {position}")
+        logit(f"❌ Unknown position: {position}", True, Fore.RED)
         return
 
     order_request = {
@@ -111,15 +126,15 @@ def execute_trade(symbol, position, price):
 
     result = mt5.order_send(order_request)
     if result.retcode != mt5.TRADE_RETCODE_DONE:
-        print(f"{Fore.RED}❌ {Style.BRIGHT}Order failed for {symbol}: {result.retcode}, {result.comment}")
+        logit(f"❌ Order failed for {symbol}: {result.retcode}, {result.comment}", True, Fore.RED)
     else:
-        print(f"{Fore.GREEN}✅ {Style.BRIGHT}Order successful for {symbol}: {order_request}")
+        logit(f"✅ Order successful for {symbol}: {order_request}", True, Fore.GREEN)
         threading.Thread(target=monitor_and_update_sl, args=(symbol,)).start()
 
 def close_trade(symbol):
     positions = mt5.positions_get(symbol=symbol)
     if positions:
-        print(f"{Fore.YELLOW}⚠️ {Style.BRIGHT}Closing open positions for {symbol}...")
+        logit(f"⚠️ Closing open positions for {symbol}...", True, Fore.YELLOW)
         for position in positions:
             order_request = {
                 "action": mt5.TRADE_ACTION_DEAL,
@@ -129,7 +144,7 @@ def close_trade(symbol):
                 "price": mt5.symbol_info_tick(symbol).bid if position.type == mt5.POSITION_TYPE_BUY else mt5.symbol_info_tick(symbol).ask,
                 "deviation": 20,
                 "magic": 244,
-                "position": position.ticket,  # Target the specific position to close
+                "position": position.ticket,
                 "comment": "Webhook close trade",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_FOK,
@@ -137,44 +152,43 @@ def close_trade(symbol):
 
             result = mt5.order_send(order_request)
             if result.retcode != mt5.TRADE_RETCODE_DONE:
-                print(f"{Fore.RED}❌ {Style.BRIGHT}Close order failed for {symbol}: {result.retcode}, {result.comment}")
+                logit(f"❌ Close order failed for {symbol}: {result.retcode}, {result.comment}", True, Fore.RED)
             else:
-                print(f"{Fore.GREEN}✅ {Style.BRIGHT}Closed position for {symbol}: {position.ticket}")
+                logit(f"✅ Closed position for {symbol}: {position.ticket}", True, Fore.GREEN)
     else:
-        print(f"{Fore.YELLOW}⚠️ {Style.BRIGHT}No open positions found for symbol {symbol}")
+        logit(f"⚠️ No open positions found for symbol {symbol}", True, Fore.YELLOW)
 
 def on_error(ws, error):
-    print(f"{Fore.RED}❗ {Style.BRIGHT}WebSocket error: {error}")
+    logit(f"❗ WebSocket error: {error}", True, Fore.RED)
 
 def on_close(ws, close_status_code, close_msg):
-    print(f"{Fore.CYAN}🔒 {Style.BRIGHT}WebSocket connection closed with code: {close_status_code}, reason: {close_msg}")
+    logit(f"🔒 WebSocket connection closed with code: {close_status_code}, reason: {close_msg}", True, Fore.CYAN)
 
 def on_open(ws):
-    print(f"{Fore.GREEN}🔓 {Style.BRIGHT}WebSocket connection opened")
+    logit(f"🔓 WebSocket connection opened", True, Fore.GREEN)
 
 def start_websocket():
     for attempt in range(retry_attempts):
         try:
-            print(f"{Fore.GREEN}🔗 Attempting WebSocket connection (attempt {attempt + 1})...")
+            logit(f"🔗 Attempting WebSocket connection (attempt {attempt + 1})...", True, Fore.GREEN)
             ws = WebSocketApp(input_websocket_url(),
                               on_message=on_message,
                               on_error=on_error,
                               on_close=on_close)
             ws.on_open = on_open
             ws.run_forever()
-            break  # Connection successful, break the loop
+            break
         except Exception as e:
-            print(f"{Fore.RED}❗ {Style.BRIGHT}WebSocket connection failed: {e}")
+            logit(f"❗ WebSocket connection failed: {e}", True, Fore.RED)
             time.sleep(retry_delay)
 
 def main():
     if not mt5.initialize(login=int(os.getenv('MT5_LOGIN')), password=os.getenv('MT5_PASSWORD'), server=os.getenv('MT5_SERVER')):
-        print(f"{Fore.RED}❌ {Style.BRIGHT}MT5 initialization failed: {mt5.last_error()}")
+        logit(f"❌ MT5 initialization failed: {mt5.last_error()}", True, Fore.RED)
         return
     else:
-        print(f"{Fore.GREEN}✅ {Style.BRIGHT}MT5 connected")
+        logit(f"✅ MT5 connected", True, Fore.GREEN)
 
-    # Start WebSocket connection
     start_websocket()
 
 if __name__ == "__main__":
