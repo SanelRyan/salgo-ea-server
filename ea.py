@@ -41,17 +41,17 @@ def on_message(ws, message):
         print(f"{Fore.RED}❗ {Style.BRIGHT}Error processing message: {e}")
 
 def calculate_dynamic_stop_loss(profit, lot):
-    base_initial_sl = -10
-    base_profit_threshold = 5
-    base_sl_increment_factor = 0.5
+    base_initial_sl = config['base_initial_sl']
+    base_profit_threshold = config['base_profit_threshold']
+    base_sl_increment_factor = config['base_sl_increment_factor']
 
-    lot_scale = max(1, lot / 0.15) 
+    lot_scale = max(1, lot / config['lot_base_value'])
     initial_sl = base_initial_sl * lot_scale
     profit_threshold = base_profit_threshold * lot_scale
 
     if profit >= profit_threshold:
         sl = profit * base_sl_increment_factor
-        sl = min(sl, 50 * lot_scale) 
+        sl = min(sl, config['max_sl_value'] * lot_scale)
     else:
         sl = initial_sl
 
