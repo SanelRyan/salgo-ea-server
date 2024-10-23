@@ -26,11 +26,11 @@ def on_message(ws, message):
         symbol = data['symbol']
         action = data['action']
         price = data['price']
-        position = data['position']  # This is assumed to be either 'buy' or 'sell'
+        position = data['position']
 
         if action == 'entry':
             print(f"{Fore.CYAN}🟢 {Style.BRIGHT}New entry signal received for {symbol} at {price}. Closing all trades first...")
-            close_trade(symbol)  # Close all open trades before taking a new one
+            close_trade(symbol)
             execute_trade(symbol, position, price)
         elif action == 'exit':
             print(f"{Fore.YELLOW}⚠️ {Style.BRIGHT}Exit signal received for {symbol}. Closing open positions...")
@@ -39,6 +39,48 @@ def on_message(ws, message):
             print(f"{Fore.RED}❌ {Style.BRIGHT}Unknown action: {action}")
     except Exception as e:
         print(f"{Fore.RED}❗ {Style.BRIGHT}Error processing message: {e}")
+
+def calculate_dynamic_stop_loss(profit, lot):
+    base_initial_sl = -10
+    base_profit_threshold = 5
+    base_sl_increment_factor = 0.5
+
+    lot_scale = max(1, lot / 0.15) 
+    initial_sl = base_initial_sl * lot_scale
+    profit_threshold = base_profit_threshold * lot_scale
+
+    if profit >= profit_threshold:
+        sl = profit * base_sl_increment_factor
+        sl = min(sl, 50 * lot_scale) 
+    else:
+        sl = initial_sl
+
+    return sl
+
+def update_stop_loss(symbol, lot):
+    positions = mt5.positions_get(symbol=symbol)
+    if positions:
+        for position in positions:
+            profit = position.profit
+            new_sl = calculate_dynamic_stop_loss(profit, lot)
+
+            order_request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "symbol": symbol,
+                "sl": position.price_open + new_sl,
+                "position": position.ticket,
+            }
+            result = mt5.order_send(order_request)
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                print(f"{Fore.RED}❌ Failed to update SL for {symbol}: {result.retcode}, {result.comment}")
+            else:
+                print(f"{Fore.GREEN}✅ Updated SL for {symbol} to {new_sl} profit")
+
+def monitor_and_update_sl(symbol):
+    lot = lotList[symbol]
+    while True:
+        update_stop_loss(symbol, lot)
+        time.sleep(10)  # Adjust the frequency of SL updates as needed
 
 def execute_trade(symbol, position, price):
     # Decide order type based on position (long or short)
@@ -72,6 +114,7 @@ def execute_trade(symbol, position, price):
         print(f"{Fore.RED}❌ {Style.BRIGHT}Order failed for {symbol}: {result.retcode}, {result.comment}")
     else:
         print(f"{Fore.GREEN}✅ {Style.BRIGHT}Order successful for {symbol}: {order_request}")
+        threading.Thread(target=monitor_and_update_sl, args=(symbol,)).start()
 
 def close_trade(symbol):
     positions = mt5.positions_get(symbol=symbol)
