@@ -8,10 +8,6 @@ import time
 import threading
 from datetime import datetime
 
-import atexit
-import signal
-import sys
-
 init(autoreset=True)
 load_dotenv()
 
@@ -28,11 +24,9 @@ def logit(message, shouldPrintToo=False, color_code=""):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     formatted_message = f"[{timestamp}] {message}"
     
-    # Log to file
     with open(log_file, 'a', encoding="utf-8") as f:
         f.write(f"{formatted_message}\n")
     
-    # Optionally print to console
     if shouldPrintToo:
         colored_message = f"{color_code}{message}{Style.RESET_ALL}"
         print(colored_message)
@@ -60,47 +54,15 @@ def on_message(ws, message):
     except Exception as e:
         logit(f"❗ Error processing message: {e}", True, Fore.RED)
 
-def calculate_dynamic_stop_loss(profit, lot):
-    base_initial_sl = config['base_initial_sl']
-    base_profit_threshold = config['base_profit_threshold']
-    base_sl_increment_factor = config['base_sl_increment_factor']
-
-    lot_scale = max(1, lot / config['lot_base_value'])
-    initial_sl = base_initial_sl * lot_scale
-    profit_threshold = base_profit_threshold * lot_scale
-
-    if profit >= profit_threshold:
-        sl = profit * base_sl_increment_factor
-        sl = min(sl, config['max_sl_value'] * lot_scale)
-    else:
-        sl = initial_sl
-
-    return sl
-
-def update_stop_loss(symbol, lot):
-    positions = mt5.positions_get(symbol=symbol)
-    if positions:
-        for position in positions:
-            profit = position.profit
-            new_sl = calculate_dynamic_stop_loss(profit, lot)
-
-            order_request = {
-                "action": mt5.TRADE_ACTION_SLTP,
-                "symbol": symbol,
-                "sl": position.price_open + new_sl,
-                "position": position.ticket,
-            }
-            result = mt5.order_send(order_request)
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                logit(f"❌ Failed to update SL for {symbol}: {result.retcode}, {result.comment}", True, Fore.RED)
-            else:
-                logit(f"✅ Updated SL for {symbol} to {new_sl} profit", True, Fore.GREEN)
-
-def monitor_and_update_sl(symbol):
-    lot = lotList[symbol]
-    while True:
-        update_stop_loss(symbol, lot)
-        time.sleep(10)
+def calculate_tp_sl(lot, price):
+    leverage = 100
+    tp_value = 5
+    sl_value = 5
+    
+    tp = price + (tp_value / (lot * leverage))
+    sl = price - (sl_value / (lot * leverage))
+    
+    return tp, sl
 
 def execute_trade(symbol, position, price):
     if position == 'long':
@@ -115,13 +77,18 @@ def execute_trade(symbol, position, price):
         logit(f"❌ Unknown position: {position}", True, Fore.RED)
         return
 
+    lot = lotList[symbol]
+    tp, sl = calculate_tp_sl(lot, price)
+
     order_request = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": symbol,
         "type": order_type,
-        "volume": lotList[symbol],
+        "volume": lot,
         "price": price,
         "deviation": 20,
+        "tp": tp,
+        "sl": sl,
         "magic": 244,
         "comment": "Webhook trade",
         "type_time": mt5.ORDER_TIME_GTC,
@@ -133,7 +100,6 @@ def execute_trade(symbol, position, price):
         logit(f"❌ Order failed for {symbol}: {result.retcode}, {result.comment}", True, Fore.RED)
     else:
         logit(f"✅ Order successful for {symbol}: {order_request}", True, Fore.GREEN)
-        threading.Thread(target=monitor_and_update_sl, args=(symbol,)).start()
 
 def close_trade(symbol):
     positions = mt5.positions_get(symbol=symbol)
@@ -170,7 +136,6 @@ def on_close(ws, close_status_code, close_msg):
 
 def on_open(ws):
     logit(f"🔓 WebSocket connection opened", True, Fore.GREEN)
-
 
 def keepAlive(ws):
     while True:
@@ -212,7 +177,6 @@ def register_exit_handlers():
 
     sys.excepthook = handle_exception
 
-
 def main():
     register_exit_handlers()
     if not mt5.initialize(login=int(os.getenv('MT5_LOGIN')), password=os.getenv('MT5_PASSWORD'), server=os.getenv('MT5_SERVER')):
@@ -222,9 +186,6 @@ def main():
         logit(f"✅ MT5 connected", True, Fore.GREEN)
 
     start_websocket()
-
-
-
 
 if __name__ == "__main__":
     main()
