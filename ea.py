@@ -8,6 +8,10 @@ import time
 import threading
 from datetime import datetime
 
+import atexit
+import signal
+import sys
+
 init(autoreset=True)
 load_dotenv()
 
