@@ -57,7 +57,7 @@ def on_message(ws, message):
 def calculate_tp_sl(lot, price):
     leverage = 100
     tp_value = 5
-    sl_value = 5
+    sl_value = 10
     
     tp = price + (tp_value / (lot * leverage))
     sl = price - (sl_value / (lot * leverage))
