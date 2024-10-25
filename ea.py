@@ -59,9 +59,9 @@ def on_message(ws, message):
         logit(f"❗ Error processing message: {e}", True, Fore.RED)
 
 def calculate_tp_sl(lot, price):
-    leverage = 100
-    tp_value = 5
-    sl_value = 10
+    leverage = config["leverage"]
+    tp_value = config["tp_value"]
+    sl_value = config["sl_value"]
     
     tp = price + (tp_value / (lot * leverage))
     sl = price - (sl_value / (lot * leverage))
