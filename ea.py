@@ -58,13 +58,17 @@ def on_message(ws, message):
     except Exception as e:
         logit(f"❗ Error processing message: {e}", True, Fore.RED)
 
-def calculate_tp_sl(lot, price):
+def calculate_tp_sl(lot, price, lshort):
     leverage = config["leverage"]
     tp_value = config["tp_value"]
     sl_value = config["sl_value"]
     
-    tp = price + (tp_value / (lot * leverage))
-    sl = price - (sl_value / (lot * leverage))
+    if lshort == "long":
+        tp = price + (tp_value / (lot * leverage))
+        sl = price - (sl_value / (lot * leverage))
+    else:
+        tp = price - (tp_value / (lot * leverage))
+        sl = price + (sl_value / (lot * leverage))
     
     return tp, sl
 
@@ -82,7 +86,7 @@ def execute_trade(symbol, position, price):
         return
 
     lot = lotList[symbol]
-    tp, sl = calculate_tp_sl(lot, price)
+    tp, sl = calculate_tp_sl(lot, price, position)
 
     order_request = {
         "action": mt5.TRADE_ACTION_DEAL,
